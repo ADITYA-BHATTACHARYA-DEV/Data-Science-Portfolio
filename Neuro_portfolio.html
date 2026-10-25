@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Neural Portfolio — From Neuron to Transformer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#02030a;--fg:#d8ecff;--mut:#7f97b3;--acc:#ff7a2a;--cy:#6fd6ff}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:'Space Grotesk',system-ui,sans-serif;overflow-x:hidden}
+body.lock{overflow:hidden;height:100%}
+canvas#gl{position:fixed;inset:0;width:100%;height:100%;z-index:0}
+#grid{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity 1.2s;
+background:linear-gradient(rgba(111,214,255,.07) 1px,transparent 1px) 0 0/48px 48px,linear-gradient(90deg,rgba(111,214,255,.07) 1px,transparent 1px) 0 0/48px 48px}
+body.flat #grid{opacity:1}
+#scroll{position:relative;z-index:2}
+section{min-height:100vh;display:flex;align-items:center;padding:0 6vw}
+.card{max-width:540px;padding:28px 30px;border:1px solid rgba(111,214,255,.18);border-radius:18px;
+background:rgba(4,10,24,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+opacity:0;transform:var(--from,translateX(-70px));transition:all 1.1s cubic-bezier(.2,.8,.2,1)}
+section.on .card{opacity:1;transform:none}
+.tag{font:400 12px 'JetBrains Mono',monospace;color:var(--acc);letter-spacing:.18em;text-transform:uppercase}
+h1,h2{margin:.35em 0 .2em;font-weight:700;line-height:1.05}
+h1{font-size:clamp(40px,7vw,84px);background:linear-gradient(90deg,#fff,var(--cy),var(--acc));-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:clamp(28px,4vw,46px)}
+p{color:#b6c9de;line-height:1.6;margin:.5em 0}
+.eq{font:400 13px 'JetBrains Mono',monospace;color:var(--cy);background:rgba(111,214,255,.08);padding:8px 12px;border-radius:8px;display:inline-block}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.chips span{font:400 11px 'JetBrains Mono',monospace;padding:4px 9px;border:1px solid rgba(255,122,42,.4);border-radius:99px;color:#ffb98a}
+a.btn,button.btn{font:500 14px 'Space Grotesk',sans-serif;color:#fff;text-decoration:none;cursor:pointer;display:inline-block;margin:8px 8px 0 0;
+padding:12px 22px;border-radius:99px;border:1px solid var(--acc);background:rgba(255,122,42,.12);transition:.3s}
+a.btn:hover,button.btn:hover{background:var(--acc);box-shadow:0 0 28px rgba(255,122,42,.6)}
+#loader{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:9vh;
+transition:opacity 1.6s ease .6s;text-align:center;background:radial-gradient(ellipse at center,transparent 40%,rgba(2,3,10,.85))}
+#loader.go{opacity:0;pointer-events:none}
+#loader h3{margin:0 0 6px;font-weight:300;letter-spacing:.4em;font-size:14px;color:var(--cy)}
+#bar{width:min(320px,70vw);height:2px;background:rgba(255,255,255,.1);margin:12px 0 18px;overflow:hidden}
+#bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cy),var(--acc));box-shadow:0 0 12px var(--acc)}
+#status{font:400 11px 'JetBrains Mono',monospace;color:var(--mut);height:16px}
+#enter{opacity:0;pointer-events:none;transition:opacity .8s;margin-top:14px}
+#enter.show{opacity:1;pointer-events:auto}
+#hud{position:fixed;z-index:20;inset:0;pointer-events:none;opacity:0;transition:opacity 1.5s}
+#hud.on{opacity:1}
+#nav{position:fixed;right:18px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:14px;pointer-events:auto}
+#nav b{position:relative;width:11px;height:11px;border-radius:50%;border:1.5px solid var(--cy);cursor:pointer;transition:.3s;background:transparent}
+#nav b.act{background:var(--acc);border-color:var(--acc);box-shadow:0 0 14px var(--acc);transform:scale(1.35)}
+#nav b span{position:absolute;right:20px;top:-3px;font:400 11px 'JetBrains Mono',monospace;white-space:nowrap;opacity:0;color:var(--fg);transition:.3s}
+#nav b:hover span{opacity:1}
+#mode{position:fixed;left:18px;top:calc(18px + env(safe-area-inset-top,0px));pointer-events:auto;margin:0}
+#brand{position:fixed;right:22px;top:calc(22px + env(safe-area-inset-top,0px));font:400 11px 'JetBrains Mono',monospace;color:var(--mut);letter-spacing:.15em}
+#depth{position:fixed;left:22px;bottom:calc(22px + env(safe-area-inset-bottom,0px));font:400 11px 'JetBrains Mono',monospace;color:var(--mut)}
+@media(max-width:700px){section{align-items:flex-end;padding-bottom:8vh}#nav{right:8px}}
+#map{position:fixed;left:22px;bottom:52px;width:72px;height:120px;border:1px solid rgba(111,214,255,.25);border-radius:8px;background:rgba(4,10,24,.5)}
+.live{margin-top:14px;padding:12px 14px;border-radius:10px;background:rgba(2,6,16,.72);border:1px solid rgba(255,122,42,.3);font:400 11px/1.6 'JetBrains Mono',monospace;color:#cfe6ff;white-space:pre;overflow-x:auto;min-height:60px}.live b{color:var(--acc);font-weight:400}.live i{color:var(--cy);font-style:normal}.live span{padding:1px 3px}
+</style>
+</head>
+<body class="lock">
+<canvas id="gl"></canvas><div id="grid"></div>
+
+<div id="loader">
+  <h3>NEURAL PORTFOLIO</h3>
+  <div id="bar"><i></i></div>
+  <div id="status">initialising synapses…</div>
+  <button class="btn" id="enter">Enter the Mind →</button>
+</div>
+
+<div id="hud">
+  <button class="btn" id="mode">▦ Flatten to 2D</button>
+  <div id="brand">NEURON → TENSOR → TRANSFORMER → DIFFUSION</div>
+  <div id="nav"></div>
+  <canvas id="map" width="144" height="240"></canvas><div id="depth"></div>
+</div>
+
+<main id="scroll"></main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ============ EDIT YOUR CONTENT HERE ============ */
+const ME={name:"Your Name",role:"AI / ML Engineer · Neuroscience-inspired",email:"you@example.com",
+ github:"https://github.com/yourname",linkedin:"https://linkedin.com/in/yourname"};
+// camera journey: top→bottom, left↔right (x,y,z of each stage)
+const PATH=[[0,-2,-6],[0,-34,-22],[38,-52,-30],[76,-84,-26],[40,-120,-50],[-4,-150,-30],[-42,-182,-52],[-6,-214,-30],[36,-248,-50],[0,-282,-30]];
+const CAREER=[
+ {key:"neuron",tag:"Stage 01 · The Neuron",title:"Curiosity Fires",when:"2017 — 2019",
+  text:"Where it began: fascination with how brains learn. Math, biology and code — the first spark between two neurons.",
+  eq:"V(t) > θ  ⇒  spike",chips:["Python","Linear Algebra","Neuroscience","Calculus"],
+  terms:["dendrite","axon","synapse","Hebbian learning","action potential","neuroplasticity","LTP","threshold θ"]},
+ {key:"perceptron",tag:"Stage 02 · The Perceptron",title:"First Model",when:"2019 — 2020",
+  text:"Built single-unit learners from scratch — weights, bias, activation. The smallest decision-maker, understood deeply.",
+  eq:"y = σ( Σ wᵢxᵢ + b )",chips:["NumPy","Scikit-learn","SVM","Logistic Regression"],
+  terms:["weights wᵢ","bias b","step function","sigmoid σ","linear separability","decision boundary","feature vector","PCA"]},
+ {key:"ann",tag:"Stage 03 · ANN",title:"Going Deep",when:"2020 — 2021",
+  text:"Dense networks for prediction and recommendation. Watch gradient descent roll down the loss landscape below.",
+  eq:"θ ← θ − η ∇L(θ)",chips:["TensorFlow","PyTorch","MLP","Adam"],
+  terms:["backpropagation","ReLU","dropout","batch norm","cross-entropy","learning rate η","overfitting","L2 regularization"]},
+ {key:"cnn",tag:"Stage 04 · CNN",title:"Learning to See",when:"2021 — 2022",
+  text:"Computer vision: a kernel slides over an RGB tensor, building feature maps. Detection, segmentation, medical imaging.",
+  eq:"(f ∗ g)[n] = Σ f[m]·g[n−m]",chips:["OpenCV","ResNet","YOLO","U-Net"],
+  terms:["kernel 3×3","stride","padding","max pooling","feature map","tensor H×W×C","receptive field","transfer learning"]},
+ {key:"rnn",tag:"Stage 05 · RNN / LSTM",title:"Memory Over Time",when:"2022 — 2023",
+  text:"Sequence modelling — speech, time-series, early NLP. Hidden states carry context forward through unrolled time.",
+  eq:"hₜ = tanh(W·hₜ₋₁ + U·xₜ)",chips:["LSTM","GRU","Seq2Seq","Time-Series"],
+  terms:["hidden state hₜ","BPTT","vanishing gradient","forget gate","LSTM cell","GRU","teacher forcing","CTC loss"]},
+ {key:"ae",tag:"Stage 06 · Autoencoder / VAE",title:"Compressing Meaning",when:"2023",
+  text:"Representation learning: squeeze data through a bottleneck, find the latent space where structure lives.",
+  eq:"L = ‖x − x̂‖² + β·KL(q‖p)",chips:["VAE","Embeddings","t-SNE","Self-Supervised"],
+  terms:["latent space z","bottleneck","encoder","decoder","KL divergence","contrastive loss","k-means","UMAP"]},
+ {key:"tf",tag:"Stage 07 · Transformer",title:"Attention Is Everything",when:"2023 — 2025",
+  text:"LLMs, RAG and agents in production. Every token attends to every other — three heads, three colours of attention.",
+  eq:"softmax(QKᵀ/√d)·V",chips:["LLMs","RAG","LoRA","MLOps"],
+  terms:["self-attention","multi-head","positional encoding","BERT","GPT","tokenization","RLHF","fine-tuning"]},
+ {key:"diff",tag:"Stage 08 · Generative AI",title:"Noise Into Meaning",when:"Now",
+  text:"Diffusion models denoise chaos into structure — watch random noise condense into a spiral. Next: agents, RL, world models.",
+  eq:"xₜ = √ᾱ·x₀ + √(1−ᾱ)·ε",chips:["Diffusion","GANs","RL","Agents"],
+  terms:["denoising","U-Net","GAN","Q-learning","policy gradient","scaling laws","MoE","inference"]}
+];
+/* ================================================== */
+const scroll=document.getElementById('scroll'),nav=document.getElementById('nav');
+const secs=[`<section><div class="card"><div class="tag">Inside the cortex</div><h1>${ME.name}</h1><p>${ME.role}. Dive with me — one signal from a single neuron down to generative AI. Scroll, tap the dots, or use ↑ ↓.</p><div class="tag" style="margin-top:14px">↓ begin the descent</div></div></section>`];
+CAREER.forEach((c,i)=>{c.side=i%2?-1:1;const a=PATH[i+1],b=PATH[i],dx=a[0]-b[0],dy=a[1]-b[1];
+ const from=Math.abs(dx)>Math.abs(dy)*.6?`translateX(${dx>0?90:-90}px)`:'translateY(80px)';
+ secs.push(`<section style="justify-content:${c.side>0?'flex-start':'flex-end'};--from:${from}"><div class="card"><div class="tag">${c.tag}</div><h2>${c.title}</h2><div class="tag" style="color:var(--cy)">${c.when}</div><p>${c.text}</p><div class="eq">${c.eq}</div><div class="chips">${c.chips.map(x=>`<span>${x}</span>`).join('')}</div><div class="live" id="live-${c.key}"></div></div></section>`)});
+secs.push(`<section style="--from:translateY(80px)"><div class="card"><div class="tag">Output layer</div><h2>Let’s connect</h2><p>The final activation — open to research, engineering and collaboration.</p><a class="btn" href="mailto:${ME.email}">Email</a><a class="btn" href="${ME.github}">GitHub</a><a class="btn" href="${ME.linkedin}">LinkedIn</a></div></section>`);
+scroll.innerHTML=secs.join('');
+const names=['Cortex',...CAREER.map(c=>c.title),'Output'];
+names.forEach((n,i)=>{const b=document.createElement('b');b.innerHTML=`<span>${n}</span>`;b.onclick=()=>scrollTo({top:i*innerHeight,behavior:'smooth'});nav.appendChild(b)});
+const sections=[...scroll.children],dots=[...nav.children];
+
+// ---------- Three setup ----------
+const canvas=document.getElementById('gl');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setClearColor(0x02030a);
+const scene=new THREE.Scene();scene.fog=new THREE.FogExp2(0x02030a,0.014);
+const camera=new THREE.PerspectiveCamera(60,1,.05,400);camera.position.set(0,0,8);
+function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}
+addEventListener('resize',resize);resize();
+
+const glow=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d');
+const g=x.createRadialGradient(32,32,0,32,32,32);g.addColorStop(0,'#fff');g.addColorStop(.25,'rgba(255,255,255,.7)');g.addColorStop(1,'rgba(255,255,255,0)');
+x.fillStyle=g;x.fillRect(0,0,64,64);return new THREE.CanvasTexture(c)})();
+const pm=(size,color,op=1)=>new THREE.PointsMaterial({size,color,map:glow,transparent:true,opacity:op,depthWrite:false,blending:THREE.AdditiveBlending});
+const lm=(color,op)=>new THREE.LineBasicMaterial({color,transparent:true,opacity:op,blending:THREE.AdditiveBlending,depthWrite:false});
+const V=(x,y,z)=>new THREE.Vector3(x,y,z),R=()=>Math.random();
+const ups=[];
+
+function pointsOf(arr,mat){const g=new THREE.BufferGeometry().setFromPoints(arr);return new THREE.Points(g,mat)}
+function linesOf(edges,mat){const a=[];edges.forEach(e=>a.push(e[0],e[1]));return new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(a),mat)}
+function pulses(edges,n,color,size){
+  const g=new THREE.BufferGeometry(),pos=new Float32Array(n*3);g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  const st=[...Array(n)].map(()=>({e:edges[R()*edges.length|0],t:R(),v:.006+R()*.014}));
+  const p=new THREE.Points(g,pm(size,color));p.frustumCulled=false;
+  ups.push(()=>{st.forEach((s,i)=>{s.t+=s.v;if(s.t>1){s.t=0;s.e=edges[R()*edges.length|0]}
+    const a=s.e[0],b=s.e[1];pos[i*3]=a.x+(b.x-a.x)*s.t;pos[i*3+1]=a.y+(b.y-a.y)*s.t;pos[i*3+2]=a.z+(b.z-a.z)*s.t});
+    g.attributes.position.needsUpdate=true});
+  return p}
+
+// ---------- Brain (scan-line hologram with gyri, temporal lobes, cerebellum, stem) ----------
+const brain=new THREE.Group();scene.add(brain);
+const ringE=[],bpts=[];
+function rings(cx,cy,cz,rx,ry,rz,n,seg,amp,sq){
+ for(let j=0;j<=n;j++){const v=-1+2*j/n,s=Math.sqrt(Math.max(0,1-v*v)),y=cy+v*ry*(v<0?sq:1);let pv=null;
+  for(let k=0;k<=seg;k++){const th=k/seg*6.2832,m=1+amp*(Math.sin(3*th+v*5)*Math.sin(5*th-v*4)+.6*Math.sin(9*th+v*8)+.3*Math.sin(15*th-v*12));
+   const q=V(cx+Math.cos(th)*rx*s*m,y,cz+Math.sin(th)*rz*s*m);if(pv)ringE.push([pv,q]);pv=q;if(k%3===0&&R()<.5)bpts.push(q)}}}
+[-1,1].forEach(s=>{rings(s*.6,0,0,1.1,1.45,2.25,56,110,.06,.7);rings(s*.95,-.85,.5,.5,.42,1.15,14,50,.04,1)});
+rings(0,-1.25,-1.75,.85,.5,.65,26,70,.015,1);rings(0,-2,-1,.28,.7,.28,10,24,0,1);
+brain.add(linesOf(ringE,lm(0x8fd0ff,.34)));brain.add(pointsOf(bpts,pm(.035,0xcfeaff,.8)));
+const bn=[];for(let i=0;i<22;i++){const s=i%2?1:-1;bn.push(V(s*(.3+R()*.8),(R()-.5)*2,(R()-.5)*3.6))}
+const be=[];bn.forEach((a,i)=>{bn.map((b,j)=>[j,a.distanceTo(b)]).filter(o=>o[0]!==i).sort((x,y)=>x[1]-y[1]).slice(0,2).forEach(o=>be.push([a,bn[o[0]]]))});
+brain.add(pointsOf(bn,pm(.5,0xff7a2a,1)));brain.add(pointsOf(bn,pm(.14,0xffffff,1)));
+brain.add(linesOf(be,lm(0xff7a2a,.55)));brain.add(pulses(be,90,0xffd2a8,.18));
+brain.scale.setScalar(1.3);brain.rotation.y=-Math.PI/2+.45;
+
+// ---------- Stage builders ----------
+function stageFrom(L,edges,extra){
+  const inner=new THREE.Group(),all=L.flat();
+  inner.add(pointsOf(all,pm(.55,0xff7a2a)));inner.add(pointsOf(all,pm(.18,0xffffff)));
+  inner.add(linesOf(edges,lm(0x6fd6ff,.28)));inner.add(pulses(edges,Math.min(160,edges.length),0xffb070,.3));
+  if(extra)inner.add(extra);return inner}
+function dense(counts,dx,dy,zs,p=1){const L=counts.map((n,i)=>[...Array(n)].map((_,j)=>V((i-(counts.length-1)/2)*dx,(j-(n-1)/2)*dy,(R()-.5)*zs)));
+  const E=[];for(let i=0;i<L.length-1;i++)L[i].forEach(a=>L[i+1].forEach(b=>R()<p&&E.push([a,b])));return[L,E]}
+const B={
+ neuron(){const L=[[V(0,0,0)]],E=[];
+  (function br(p,d,depth){if(depth>4)return;const k=depth<2?3:2;
+    for(let i=0;i<k;i++){const nd=d.clone().add(V(R()-.5,R()-.5,R()-.5).multiplyScalar(1.1)).normalize();
+      const q=p.clone().add(nd.multiplyScalar(2.1-depth*.3));E.push([p,q]);L[0].push(q);br(q,nd,depth+1)}})(V(0,0,0),V(1,0,0),0);
+  (function br(p,d,depth){if(depth>3)return;for(let i=0;i<2;i++){const nd=d.clone().add(V(R()-.5,R()-.5,R()-.5).multiplyScalar(1.1)).normalize();
+      const q=p.clone().add(nd.multiplyScalar(2-depth*.3));E.push([p,q]);L[0].push(q);br(q,nd,depth+1)}})(V(0,0,0),V(-1,.2,0),0);
+  const s=pointsOf([V(0,0,0)],pm(2.6,0xff7a2a,.55));return stageFrom(L,E,s)},
+ perceptron(){const[L,E]=dense([5,1],6,1.8,3);const s=pointsOf([L[1][0]],pm(2.2,0xff7a2a,.5));return stageFrom(L,E,s)},
+ ann(){const[L,E]=dense([4,7,7,3],4.2,1.35,3.5,.8);return stageFrom(L,E)},
+ cnn(){const sizes=[7,5,4,3],L=[],E=[],grids=[];
+  sizes.forEach((n,i)=>{const g=[];for(let r=0;r<n;r++)for(let c=0;c<n;c++)g.push(V(i*4.3-6.5+(c-(n-1)/2)*.7*(1+i*.15),(r-(n-1)/2)*.7*(1+i*.15),-i*2.2+(R()-.5)*.2));grids.push({g,n});L.push(g)});
+  for(let i=0;i<3;i++){const A=grids[i],Bn=grids[i+1];A.g.forEach((a,k)=>{const r=k/A.n|0,c=k%A.n;E.push([a,Bn.g[Math.min(Bn.n-1,Math.floor(r*Bn.n/A.n))*Bn.n+Math.min(Bn.n-1,Math.floor(c*Bn.n/A.n))]])})}
+  const flat=grids[3].g.map(p=>V(p.x+4,p.y*.4,p.z));const fc=[...Array(6)].map((_,i)=>V(grids[3].g[0].x+5,(i-2.5)*.9,-6.6));
+  L.push(fc);fc.forEach(f=>grids[3].g.forEach((g,i)=>i%2===0&&E.push([g,f])));return stageFrom(L,E)},
+ rnn(){const T=6,L=[],E=[];
+  for(let t=0;t<T;t++){const x=(t-(T-1)/2)*3.3,z=(R()-.5)*1.5;L.push([V(x,-2.2,z),V(x,0,z),V(x,2.2,z)]);
+    E.push([L[t][0],L[t][1]],[L[t][1],L[t][2]]);if(t)E.push([L[t-1][1],L[t][1]],[L[t-1][1],L[t][1]])}
+  const loops=[];for(let t=0;t<T;t++){const c=L[t][1];for(let i=0;i<20;i++){const a=i/20*6.283,b=(i+1)/20*6.283;
+    E.push([V(c.x+Math.cos(a)*.55,c.y+.55+Math.sin(a)*.55,c.z),V(c.x+Math.cos(b)*.55,c.y+.55+Math.sin(b)*.55,c.z)])}}
+  return stageFrom(L,E)},
+ tf(){const L=[],E=[];for(let l=0;l<3;l++)L.push([...Array(7)].map((_,i)=>V((i-3)*1.7,(l-1)*2.8,-l*1.8)));
+  for(let l=0;l<2;l++)L[l].forEach(a=>L[l+1].forEach(b=>R()<.75&&E.push([a,b])));
+  L[0].forEach((a,i)=>i<6&&E.push([a,L[0][i+1]]));return stageFrom(L,E)}
+};
+const sm=t=>t*t*(3-2*t),N=PATH.length;
+// --- extra / enhanced builders ---
+const _cnn=B.cnn;B.cnn=()=>{const g=_cnn();
+ [[0xff4455,1],[0x44ff88,2],[0x4488ff,3]].forEach(([c,k])=>{const a=[];for(let r=0;r<7;r++)for(let q=0;q<7;q++)a.push(V(-6.5+(q-3)*.7+.3*k,(r-3)*.7-.3*k,-.7*k));g.add(pointsOf(a,pm(.32,c,.9)))});
+ const kb=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(2.1,2.1,.5)),new THREE.LineBasicMaterial({color:0xffd24a}));g.add(kb);
+ ups.push(()=>{const k=(performance.now()/350|0)%25;kb.position.set(-6.5+(k%5-2)*.7,(2-(k/5|0))*.7,0)});return g};
+const _tf=B.tf;B.tf=()=>{const g=_tf();
+ [0x6fd6ff,0xff9a52,0xb79bff].forEach(c=>{const E=[];for(let n=0;n<6;n++){const i=R()*7|0,j=R()*7|0;if(i===j)continue;
+  const a=V((i-3)*1.7,-2.8,0),b=V((j-3)*1.7,-2.8,0),m=a.clone().add(b).multiplyScalar(.5);m.y+=.5*Math.abs(i-j)+.5;m.z+=1;let pv=a;
+  for(let k=1;k<=16;k++){const u=k/16,w=1-u,q=V(w*w*a.x+2*u*w*m.x+u*u*b.x,w*w*a.y+2*u*w*m.y+u*u*b.y,w*w*a.z+2*u*w*m.z+u*u*b.z);E.push([pv,q]);pv=q}}
+  g.add(linesOf(E,lm(c,.85)))});
+ const w=[];for(let x=-6;x<6;x+=.2)w.push([V(x,-5.5+Math.sin(x*2)*.4,0),V(x+.2,-5.5+Math.sin((x+.2)*2)*.4,0)]);g.add(linesOf(w,lm(0x6fd6ff,.5)));return g};
+B.ae=()=>{const[L,E]=dense([8,5,2,5,8],3.4,1.1,3);return stageFrom(L,E,pointsOf(L[2],pm(2.6,0xb79bff,.6)))};
+B.diff=()=>{const g=new THREE.Group(),M=1600,tg=[],ns=[],pos=new Float32Array(M*3);
+ for(let i=0;i<M;i++){const a=i/M*38,r=.4+a*.18;tg.push(V(Math.cos(a)*r*(1+.08*R()),Math.sin(a)*r*(1+.08*R()),(R()-.5)*1.2));ns.push(V((R()-.5)*16,(R()-.5)*12,(R()-.5)*8))}
+ const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(pos,3));const p=new THREE.Points(geo,pm(.16,0xffb070,.9));p.frustumCulled=false;g.add(p);
+ ups.push(()=>{const m=sm(.5+.5*Math.sin(performance.now()/1800));for(let i=0;i<M;i++){pos[i*3]=ns[i].x+(tg[i].x-ns[i].x)*m;pos[i*3+1]=ns[i].y+(tg[i].y-ns[i].y)*m;pos[i*3+2]=ns[i].z+(tg[i].z-ns[i].z)*m}geo.attributes.position.needsUpdate=true});return g};
+
+// --- floating concept labels ---
+const tags=[];
+function label(txt,col){const c=document.createElement('canvas');c.width=320;c.height=64;const x=c.getContext('2d');x.font='500 28px "JetBrains Mono",monospace';x.fillStyle=col;x.shadowColor=col;x.shadowBlur=14;x.textAlign='center';x.fillText(txt,160,42);
+ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,opacity:.8,depthWrite:false,blending:THREE.AdditiveBlending}));s.scale.set(6,1.2,1);return s}
+function addTerms(a,c,sx,sy,sz){a.forEach((t,k)=>{const s=label(t,['#6fd6ff','#ff9a52','#b79bff'][k%3]);s.position.set(c[0]+(R()-.5)*sx,c[1]+(R()-.5)*sy,c[2]+(R()-.5)*sz);s.userData={b:s.position.y,ph:R()*6};scene.add(s);tags.push(s)})}
+addTerms(['neocortex','Hebbian learning','synapse','neuroplasticity','LTP','hippocampus','connectome','backprop ≈ ?'],[0,-1,-8],16,8,8);
+
+const stages=[],mob=innerWidth<=700;
+CAREER.forEach((c,i)=>{const a=PATH[i+1],o=new THREE.Group(),inner=B[c.key]();o.add(inner);
+ o.position.set(a[0]+(mob?0:c.side*5),a[1]+(mob?2.5:0),a[2]);o.scale.setScalar(mob?.55:.8);scene.add(o);stages.push(inner);
+ addTerms(c.terms,[a[0],a[1],a[2]-2],30,16,14)});
+
+// loss landscape with gradient-descent ball
+const LS=new THREE.Group(),f=(x,y)=>.011*(x*x+y*y)+1.6*Math.sin(x*.45)*Math.cos(y*.45);
+{const geo=new THREE.PlaneGeometry(30,30,40,40),pa=geo.attributes.position;for(let i=0;i<pa.count;i++)pa.setZ(i,f(pa.getX(i),pa.getY(i)));
+ LS.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0x2a7fff,wireframe:true,transparent:true,opacity:.35,blending:THREE.AdditiveBlending,depthWrite:false})));
+ const ball=pointsOf([V(0,0,0)],pm(1.4,0xff7a2a));ball.frustumCulled=false;LS.add(ball);let bx=12,by=-9,st=0;
+ ups.push(()=>{if(++st%2)return;const e=.05,gx=(f(bx+e,by)-f(bx-e,by))/(2*e),gy=(f(bx,by+e)-f(bx,by-e))/(2*e);bx-=gx*.9;by-=gy*.9;
+  if(Math.hypot(gx,gy)<.02||st>500){bx=(R()-.5)*26;by=(R()-.5)*26;st=0}ball.position.set(bx,by,f(bx,by)+.4)});
+ LS.rotation.x=-1.15;LS.position.set(58,-102,-38);scene.add(LS)}
+
+// deep-space dust
+const d1=[],d2=[];for(let i=0;i<5000;i++)d1.push(V(-110+R()*240,-300+R()*310,-90+R()*105));
+for(let i=0;i<500;i++)d2.push(V(-110+R()*240,-300+R()*310,-90+R()*105));
+scene.add(pointsOf(d1,pm(.09,0x7fb6ff,.55)));scene.add(pointsOf(d2,pm(.22,0xff9a52,.5)));
+
+// --- camera journey ---
+const CP=PATH.map((a,i)=>i?V(a[0],a[1],a[2]+14):V(0,0,.5)),LP=PATH.map(a=>V(a[0],a[1],a[2]));
+const cC=new THREE.CatmullRomCurve3(CP,false,'catmullrom',.5),lC=new THREE.CatmullRomCurve3(LP,false,'catmullrom',.5);
+const camPos=V(0,0,8),lookS=V(0,0,0),prev=V(0,0,8);
+let started=false,flat=0,flatT=0,mx=0,my=0,spin=0,loadP=0,fovCur=60,bank=0;
+addEventListener('pointermove',e=>{mx=e.clientX/innerWidth-.5;my=e.clientY/innerHeight-.5});
+const modeBtn=document.getElementById('mode');
+modeBtn.onclick=()=>{flatT=flatT?0:1;document.body.classList.toggle('flat',!!flatT);modeBtn.textContent=flatT?'◈ Restore 3D':'▦ Flatten to 2D'};
+addEventListener('keydown',e=>{if(!started)return;const s=Math.round(scrollY/innerHeight);
+ if(e.key==='ArrowDown'||e.key==='PageDown'){e.preventDefault();scrollTo({top:Math.min(N-1,s+1)*innerHeight,behavior:'smooth'})}
+ if(e.key==='ArrowUp'||e.key==='PageUp'){e.preventDefault();scrollTo({top:Math.max(0,s-1)*innerHeight,behavior:'smooth'})}
+ if(e.key==='2'||e.key==='3')modeBtn.click()});
+
+const loader=document.getElementById('loader'),bar=loader.querySelector('#bar i'),status=document.getElementById('status'),enter=document.getElementById('enter');
+const msgs=['initialising synapses…','allocating tensors…','loading weights…','warming up GPUs…','ready'];
+const lt=setInterval(()=>{loadP=Math.min(100,loadP+2+R()*4);bar.style.width=loadP+'%';status.textContent=msgs[Math.min(4,loadP/25|0)];
+ if(loadP>=100){clearInterval(lt);enter.classList.add('show')}},60);
+enter.onclick=()=>{started=true;spin=1;loader.classList.add('go');
+ setTimeout(()=>{document.body.classList.remove('lock');document.getElementById('hud').classList.add('on')},2400)};
+
+const depth=document.getElementById('depth'),mc=document.getElementById('map').getContext('2d');
+function drawMap(){const w=144,h=240,X=x=>(x+60)/160*w,Y=y=>-y/290*h;mc.clearRect(0,0,w,h);mc.strokeStyle='rgba(111,214,255,.5)';mc.beginPath();
+ PATH.forEach((a,i)=>i?mc.lineTo(X(a[0]),Y(a[1])):mc.moveTo(X(a[0]),Y(a[1])));mc.stroke();
+ mc.fillStyle='#6fd6ff';PATH.forEach(a=>mc.fillRect(X(a[0])-2,Y(a[1])-2,4,4));
+ mc.fillStyle='#ff7a2a';mc.shadowColor='#ff7a2a';mc.shadowBlur=10;mc.beginPath();mc.arc(X(camPos.x),Y(camPos.y),5,0,6.3);mc.fill();mc.shadowBlur=0}
+// ---------- LIVE MATH (real computations, updated in real time) ----------
+const fm=(x,d=2)=>(x<0?'':' ')+x.toFixed(d),sig=x=>1/(1+Math.exp(-x)),vec=a=>'['+a.map(v=>fm(v)).join(',')+']';
+const spark=(a,lo,hi)=>a.map(v=>'▁▂▃▄▅▆▇█'[Math.max(0,Math.min(7,((v-lo)/(hi-lo)*7.99)|0))]).join('');
+const LIVE={},ST={v:-65,sp:0,h:[],fl:0,c:0};
+LIVE.neuron=t=>{const I=2+1.2*Math.sin(t*1.5);let fire=0;for(let i=0;i<9;i++){ST.v+=(-(ST.v+65)+10*I)/10;if(ST.v>-50){ST.v=-65;ST.sp++;fire=1}}
+ ST.h.push(fire?-44:ST.v);ST.h=ST.h.slice(-42);if(fire)ST.fl=4;
+ return `<i>Leaky integrate-and-fire:  τ·dV/dt = −(V − Vrest) + R·I</i>\nτ=20ms  R=10MΩ  Vrest=−65mV  θ=−50mV\nI = <b>${I.toFixed(2)}</b> nA    V = <b>${ST.v.toFixed(1)}</b> mV\n${spark(ST.h,-66,-44)}\nspikes = <b>${ST.sp}</b>  ${ST.fl-->0?'⚡ V>θ → FIRE, reset to Vrest':''}`};
+LIVE.perceptron=t=>{const x=[Math.sin(t),Math.cos(t*1.3),Math.sin(t*.7)],w=[.8,-.5,.3],b=.1,z=w.reduce((s,wi,i)=>s+wi*x[i],b),y=sig(z);
+ return `<i>x</i> = ${vec(x)}\n<i>w</i> = ${vec(w)}   <i>b</i> = ${fm(b)}\nz = Σwᵢxᵢ + b = ${w.map((wi,i)=>fm(wi)+'·'+fm(x[i])).join(' +')} + ${fm(b)}\n  = <b>${fm(z,3)}</b>\ny = σ(z) = 1/(1+e^−z) = <b>${y.toFixed(3)}</b>   → class <b>${y>.5?1:0}</b>`};
+const AN={W1:[0,1,2].map(()=>[R()*2-1,R()*2-1]),b1:[0,0,0],W2:[R()-.5,R()-.5,R()-.5].map(v=>v*2),b2:0,ep:0,lh:[]},XOR=[[0,0,0],[0,1,1],[1,0,1],[1,1,0]];
+const fwd=x=>{const h=AN.W1.map((w,i)=>Math.tanh(w[0]*x[0]+w[1]*x[1]+AN.b1[i]));return[h,sig(AN.W2.reduce((s,w,i)=>s+w*h[i],AN.b2))]};
+function trainEp(lr){let L=0;XOR.forEach(([a,b,y])=>{const x=[a,b],[h,yh]=fwd(x);L+=-(y*Math.log(yh+1e-9)+(1-y)*Math.log(1-yh+1e-9));const dz=yh-y;
+ for(let i=0;i<3;i++){const dz1=dz*AN.W2[i]*(1-h[i]*h[i]);AN.W2[i]-=lr*dz*h[i];AN.W1[i][0]-=lr*dz1*x[0];AN.W1[i][1]-=lr*dz1*x[1];AN.b1[i]-=lr*dz1}AN.b2-=lr*dz});AN.ep++;return L/4}
+LIVE.ann=t=>{let L=0;for(let i=0;i<40;i++)L=trainEp(.5);AN.lh.push(L);AN.lh=AN.lh.slice(-40);
+ const[a,b,y]=XOR[(t*1.5|0)%4],[h,yh]=fwd([a,b]),dz=yh-y,Ls=-(y*Math.log(yh)+(1-y)*Math.log(1-yh)),mu=h.reduce((s,v)=>s+v,0)/3,va=h.reduce((s,v)=>s+(v-mu)**2,0)/3;
+ return `<i>Dense+tanh:</i> h = tanh(W₁x + b₁)    x=[${a},${b}]  target y=<b>${y}</b>\nh = ${vec(h)}\n<i>Sigmoid out:</i> ŷ = σ(W₂·h + b₂) = <b>${yh.toFixed(3)}</b>\n<i>BCE loss:</i> L = −[y·ln ŷ + (1−y)·ln(1−ŷ)] = <b>${Ls.toFixed(3)}</b>\n<i>Backprop:</i> ∂L/∂z₂ = ŷ−y = ${fm(dz,3)}\n∂L/∂W₂ = (ŷ−y)·h = ${vec(h.map(v=>v*dz))}\n<i>SGD:</i> W ← W − η·∂L/∂W   (η=0.5)\n<i>BatchNorm:</i> ĥ=(h−μ)/√(σ²+ε) = ${vec(h.map(v=>(v-mu)/Math.sqrt(va+1e-5)))}\nepoch <b>${AN.ep}</b>  ${spark(AN.lh,0,.8)}  loss=<b>${L.toFixed(4)}</b>`};
+const IMG=[...Array(7)].map((_,r)=>[...Array(7)].map((_,c)=>(c<3?8:1)+((r*3+c*5)%3))),KER=[[1,0,-1],[2,0,-2],[1,0,-1]];
+LIVE.cnn=()=>{const k=(performance.now()/350|0)%25,r0=k/5|0,c0=k%5;let s=0;const rows=[0,1,2].map(i=>{const pr=[0,1,2].map(j=>IMG[r0+i][c0+j]);pr.forEach((v,j)=>s+=v*KER[i][j]);return ` ${pr.join('  ')}     ×    ${KER[i].map(v=>(v<0?'':' ')+v).join(' ')}`});
+ return `<i>Conv2D:</i> (X∗K)[r,c] = Σᵢ Σⱼ X[r+i,c+j]·K[i,j]\n<i>patch @(${r0},${c0})        Sobel-x kernel</i>\n${rows.join('\n')}\nΣ = <b>${s}</b>   → ReLU = max(0,Σ) = <b>${Math.max(0,s)}</b>\n<i>out size</i> = ⌊(7−3+2·0)/1⌋+1 = 5 → 5×5 feature map\n<i>MaxPool 2×2:</i> max of window → halves resolution`};
+const RS={c:0,h:0};
+LIVE.rnn=t=>{let h=0,g=1;const rows=[];for(let i=1;i<=6;i++){const x=Math.sin(t*1.5+i*1.2);h=Math.tanh(.6*h+1.1*x);g*=.6*(1-h*h);if(i>2)rows.push(`t=${i}  x=${fm(x)}  h=<b>${fm(h)}</b>`)}
+ const x=Math.sin(t*2),hp=RS.h,fg=sig(.5*x+.4*hp-.1),ig=sig(.7*x-.3*hp),og=sig(.2*x+.8*hp),gt=Math.tanh(.9*x+.1*hp);RS.c=fg*RS.c+ig*gt;RS.h=og*Math.tanh(RS.c);
+ return `<i>RNN:</i> hₜ = tanh(0.6·hₜ₋₁ + 1.1·xₜ)\n${rows.join('\n')}\n∂h₆/∂h₀ = Π wₕ(1−hₜ²) = <b>${g.toExponential(1)}</b> ← vanishing gradient\n<i>LSTM:</i> f=σ(·)=<b>${fg.toFixed(2)}</b> i=<b>${ig.toFixed(2)}</b> o=<b>${og.toFixed(2)}</b> g̃=tanh(·)=${fm(gt)}\ncₜ = f·cₜ₋₁ + i·g̃ = <b>${fm(RS.c)}</b>   hₜ = o·tanh(cₜ) = <b>${fm(RS.h)}</b>`};
+const WE=[[.6,-.4,.3,.2],[-.2,.5,.4,-.6]];
+LIVE.ae=t=>{const x=[Math.sin(t),Math.cos(t*.8),Math.sin(t*1.7),Math.cos(t*.5)],z=WE.map(r=>Math.tanh(r.reduce((s,w,i)=>s+w*x[i],0))),xh=[0,1,2,3].map(i=>z[0]*WE[0][i]+z[1]*WE[1][i]),mse=x.reduce((s,v,i)=>s+(v-xh[i])**2,0)/4,kl=z.reduce((s,m)=>s+.5*(m*m+.64-Math.log(.64)-1),0);
+ return `<i>Encoder:</i> z = tanh(Wₑx)   x ∈ ℝ⁴ → z ∈ ℝ²\nx = ${vec(x)}\nz = <b>${vec(z)}</b>   ← latent code\n<i>Decoder:</i> x̂ = W_d·z = ${vec(xh)}\n<i>Recon:</i> ‖x−x̂‖²/4 = <b>${mse.toFixed(3)}</b>\n<i>VAE KL</i> (σ=0.8): ½Σ(μ²+σ²−lnσ²−1) = <b>${kl.toFixed(3)}</b>\nELBO ≈ −recon − β·KL = <b>${(-mse-.5*kl).toFixed(3)}</b>`};
+LIVE.tf=t=>{const T=['the','brain','learns','fast'],X=T.map((_,i)=>[0,1,2,3].map(j=>Math.sin(i*1.7+j*2.1+t*.6))),W=a=>[0,1,2,3].map(i=>[0,1,2,3].map(j=>((i*7+j*3+a)%5-2)/2)),Wq=W(1),Wk=W(3),mul=(v,M)=>M[0].map((_,j)=>v.reduce((s,x,i)=>s+x*M[i][j],0)),Q=X.map(v=>mul(v,Wq)),K=X.map(v=>mul(v,Wk));
+ const A=Q.map(q=>{const s=K.map(k=>q.reduce((a,x,i)=>a+x*k[i],0)/2),m=Math.max(...s),e=s.map(v=>Math.exp(v-m)),z=e.reduce((a,b)=>a+b,0);return e.map(v=>v/z)});
+ return `<i>Attention(Q,K,V) = softmax(QKᵀ/√dₖ)·V     dₖ=4</i>\n          ${T.map(w=>w.padEnd(7)).join('')}\n${A.map((r,i)=>T[i].padEnd(8)+r.map(p=>`<span style="background:rgba(255,154,82,${(p*.9).toFixed(2)})"> ${p.toFixed(2)} </span>`).join('')).join('\n')}\nrows sum to 1 · "<b>${T[1]}</b>" attends most to "<b>${T[A[1].indexOf(Math.max(...A[1]))]}</b>"\nout₁ = Σⱼ A₁ⱼ·vⱼ  ·  PE(pos,2i)=sin(pos/10000^(2i/d))`};
+LIVE.diff=()=>{const now=performance.now(),m=sm(.5+.5*Math.sin(now/1800)),up=Math.cos(now/1800)>0,ab=Math.min(.999,Math.max(.001,m)),x0=1,eps=.7,xt=Math.sqrt(ab)*x0+Math.sqrt(1-ab)*eps,eh=eps+.04*Math.sin(now/300),x0h=(xt-Math.sqrt(1-ab)*eh)/Math.sqrt(ab);
+ return `<i>Forward:</i> xₜ = √ᾱₜ·x₀ + √(1−ᾱₜ)·ε,   ε~𝒩(0,I)\nt = <b>${Math.round((1-m)*1000)}</b>/1000   ᾱₜ = <b>${ab.toFixed(3)}</b>   ${up?'▲ reverse: denoising':'▼ forward: adding noise'}\nxₜ = √${ab.toFixed(2)}·${x0} + √${(1-ab).toFixed(2)}·${eps} = <b>${xt.toFixed(3)}</b>\n<i>Network predicts</i> ε̂ = ε_θ(xₜ,t) = ${eh.toFixed(3)}\n<i>Recover:</i> x̂₀ = (xₜ − √(1−ᾱₜ)·ε̂)/√ᾱₜ = <b>${x0h.toFixed(3)}</b>\n<i>Loss:</i> ‖ε − ε̂‖² = <b>${((eps-eh)**2).toFixed(5)}</b>`};
+let lastL=0;
+function liveUpdate(a,t){if(!started||a<1||a>CAREER.length)return;const n=performance.now();if(n-lastL<90)return;lastL=n;const key=CAREER[a-1].key,el=document.getElementById('live-'+key);if(el&&LIVE[key])el.innerHTML=LIVE[key](n/1000)}
+function scramble(el){const h=el.querySelector('h1,h2');if(!h)return;const tx=h.dataset.t||(h.dataset.t=h.textContent);let n=0;const id=setInterval(()=>{h.textContent=tx.split('').map((c,i)=>i<n||c===' '?c:'01ΣΔ∇λ∂θ'[R()*9|0]).join('');n+=.7;if(n>=tx.length){h.textContent=tx;clearInterval(id)}},30)}
+// neural spark trail following the pointer
+const TRN=50,trP=new Float32Array(TRN*3),trG=new THREE.BufferGeometry(),trH=[];trG.setAttribute('position',new THREE.BufferAttribute(trP,3));
+const trO=new THREE.Points(trG,pm(.4,0xffa060,.8));trO.frustumCulled=false;scene.add(trO);
+function trail(){const p=V(mx*2,-my*2,.5).unproject(camera);p.sub(camera.position).normalize().multiplyScalar(11).add(camera.position);trH.unshift(p);if(trH.length>TRN)trH.pop();
+ trH.forEach((q,i)=>{trP[i*3]=q.x+(R()-.5)*.05*i;trP[i*3+1]=q.y+(R()-.5)*.05*i;trP[i*3+2]=q.z});for(let i=trH.length;i<TRN;i++){trP[i*3]=trP[i*3+1]=trP[i*3+2]=1e4}trG.attributes.position.needsUpdate=true}
+const clock=new THREE.Clock();
+function tick(){
+ const t=clock.getElapsedTime();flat+=(flatT-flat)*.05;spin*=.985;
+ brain.rotation.y+=.0025+spin*.06;brain.scale.z=1.3*(1-flat*.97);brain.visible=camPos.y>-70;LS.scale.z=1-flat*.97;
+ let tp,tl,k=0;
+ if(started){k=Math.max(0,Math.min(N-1,scrollY/innerHeight));const i=Math.min(N-2,Math.floor(k)),u=(i+sm(k-i))/(N-1);
+  tp=cC.getPoint(u);tl=lC.getPoint(u);tp.addScaledVector(tp.clone().sub(tl).normalize(),flat*16)}
+ else{tp=V(Math.sin(t*.15)*2,.6,8);tl=V(0,0,0)}
+ camPos.lerp(tp,started&&k<.05?.025:.07);lookS.lerp(tl,.08);
+ const vx=camPos.x-prev.x,sp=camPos.distanceTo(prev);prev.copy(camPos);
+ camera.position.copy(camPos);camera.lookAt(lookS);
+ bank+=(Math.max(-.4,Math.min(.4,-vx*.25))-bank)*.1;camera.rotateZ(bank);
+ camera.translateX(mx*1.2*(1-flat));camera.translateY(-my*.8*(1-flat));
+ fovCur+=(60-flat*38+Math.min(24,sp*9)-fovCur)*.12;camera.fov=fovCur;camera.updateProjectionMatrix();
+ stages.forEach((g,i)=>{g.scale.z=1-flat*.97;g.rotation.y=(1-flat)*(Math.sin(t*.25+i)*.35+mx*.8);g.rotation.x=(1-flat)*my*.3});
+ tags.forEach(l=>l.position.y=l.userData.b+Math.sin(t*.6+l.userData.ph)*.5);
+ ups.forEach(u=>u());trail();renderer.render(scene,camera);
+ const a=Math.round(k);dots.forEach((d,i)=>d.classList.toggle('act',i===a));
+ sections.forEach((el,i)=>{const on=started&&Math.abs(k-i)<.6;if(on&&!el.classList.contains('on'))scramble(el);el.classList.toggle('on',on)});liveUpdate(a,t);
+ if(started){depth.textContent=`depth ${(-camPos.y).toFixed(0)} m · ${flatT?'2D plane':'3D volume'} · layer ${a}/${N-1}`;drawMap()}
+ requestAnimationFrame(tick)}
+tick();
+</script>
+</body>
+</html>
